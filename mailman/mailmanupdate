@@ -1,0 +1,330 @@
+#!/bin/sh
+export LC_ALL
+LC_ALL=C
+
+curlit () {
+    if [ "$VERBOSE" -gt 2 ]; then
+        echo curl -s -retry 5 --connect-timeout 1 "$@"
+    fi
+    curl -s --retry 5 --connect-timeout 1 "$@"
+    # curl "$@"
+    if [ "$?" != 0 ]; then
+        echo "Erreur de connexion : $@"
+        exit 1
+    fi
+}
+
+TMPFILE=/tmp/xxx
+mkdir -p $TMPFILE
+cd $TMPFILE
+rm -f cookies cookies2 fetch fetch2 head head2 log
+
+PWD="defaultpassword"
+
+url_encode () {
+    echo "$@"|perl -Mutf8 -MURI::Escape -e 'my $line=join("",<>); chomp $line; utf8::decode($line); print uri_escape($line)'
+}
+
+log () {
+    echo "$@" >> log
+    if [ "$VERBOSE" -gt 1 ]; then
+        echo "$@"
+    fi
+}
+
+warn () {
+    echo "$@" >> warn
+    if [ "$VERBOSE" -gt 0 ]; then
+        echo "$@"
+    fi
+}
+
+die () {
+    status="$1"
+    shift
+    echo "$@" >> log
+    echo "Dying with status $status" >> log
+    if [ "$VERBOSE" -gt 0 ]; then
+        if [ -n "$1" ]; then
+            echo "$@"
+        fi
+    fi
+    if [ "$VERBOSE" -gt 1 ]; then
+        echo "Dying with status $status"
+    fi
+    exit "$status"
+}
+
+
+
+VERBOSE=1
+while [ "$1" = "-v" ]; do
+    VERBOSE=$((VERBOSE+1))
+    shift
+done
+if [ "$1" = "-q" ]; then
+    VERBOSE=0
+    shift
+fi
+
+DUMP=0
+if [ "$1" = "-d" ]; then
+    DUMP=1
+    shift
+fi
+
+ADRDUMP=0
+if [ "$1" = "-a" ]; then
+    ADRDUMP=1
+    shift
+fi
+
+UPDATE=0
+if [ "$1" = "-u" ]; then
+    UPDATE=1
+    shift
+fi
+
+
+LIST="$1"
+shift
+
+CONFIGDIR="$HOME/.config/mailman"
+CONFIG="$CONFIGDIR/$LIST"
+
+if [ -z "$LIST" ]; then
+    echo "$0 [-v] [-q] [-d] [-u] nomdeliste [adresses]"
+    echo "Order of options is significant"
+    echo "v: verbose mode"
+    echo "q: quiet mode"
+    echo "a: dump addresses mode"
+    echo "d: dump settings mode"
+    echo "u: update settings mode"
+    echo "Settings are stored under $CONFIGDIR/<listname>"
+    echo "Dumps are made in $CONFIGDIR/<listname>.dump"
+    die 0
+fi
+
+FORCEDUMP=0
+if [ -f $CONFIG ]; then
+    log "Reading config"
+    . $CONFIG
+else
+    warn "No config file. Dump mode activated"
+    DUMP=1
+    FORCEDUMP=1
+fi
+
+# Setup default values
+
+if [ -z "$LISTNAME" ]; then
+    LISTNAME=$LIST
+fi
+URLADMIN="${URL}/admin/${LISTNAME}"
+
+if [ -z "$TRYPASSWD" ]; then
+    TRYPASSWD="$PASSWD"
+fi
+
+if [ "$1" = "-l" ]; then
+    shift
+    LISTMODE=1
+else
+    LISTMODE=0
+fi
+
+rm -f goal
+touch goal
+for i in "$@"; do
+    echo "$i"| tr '[:upper:]' '[:lower:]' >> goal
+done
+LC_ALL=C sort -u goal > goals
+
+# Auth stage
+
+touch cookies
+XURL="$URLADMIN"
+TRIES=0
+FAILED=1
+for passwd in $TRYPASSWD; do
+    if [ "$FAILED" -gt 0 ]; then
+        TRIES=$((TRIES+1))
+        log "Authentification, try $TRIES"
+        curlit -k -d adminpw="$passwd" -D head -c cookies -o fetch "$XURL"
+        FAILED=$(grep -a 'INPUT TYPE="password" NAME="adminpw"' fetch|wc -l)
+        if [ "$FAILED" -gt 0 ]; then
+            log "Password $passwd failed"
+        else
+            log "Authentication success with $passwd"
+            cp cookies cookies2
+        fi
+    fi
+done
+
+if [ "$FAILED" -gt 0 ]; then
+    die 1 "No authentication for list $LIST. I tried $TRIES passwords."
+fi
+
+SUBPAGES="general language archive privacy privacySLASHsender privacySLASHrecipient privacySLASHspam privacySLASHsubscribing"
+
+if [ "$DUMP" = 0 ]&&[ "$UPDATE" = 0 ]; then
+    SUBPAGES=""
+fi
+
+rm -f currentvalues
+touch currentvalues
+for subpage in $SUBPAGES; do
+    subpageurl=$(echo $subpage|sed -e 's/SLASH/\//g')
+    XURL="${URLADMIN}/$subpageurl"
+    curlit -k -d adminpw="$passwd" -D head -c cookies -o fetch "$XURL"
+    TEXTFIELDS=$(cat fetch | grep -a '<INPUT'|grep -a 'type="TEXT"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|xargs echo)
+    echo "FIELDS_${subpage}_TEXT=\"$TEXTFIELDS\"" >> currentvalues
+    cat fetch | grep -a '<INPUT'|grep -a 'type="TEXT"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/VALUE_'$subpage'_\1=\2/g'|grep -a -v INPUT |perl -MURI::Escape -e 'while(<>) {chomp; ($a,$b)=split(/=/);print $a,"=\"",uri_escape($b,"^A-Za-z0-9\-\._~"),"\"\n";}'  >> currentvalues
+    RADIOFIELDS=$(cat fetch | grep -a '<INPUT'|grep -a 'type="RADIO"'|grep -a CHECKED|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|xargs echo)
+    echo "FIELDS_${subpage}_RADIO=\"$RADIOFIELDS\"" >> currentvalues
+    cat fetch | grep -a '<INPUT'|grep -a  'type="RADIO"'|grep -a CHECKED|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/VALUE_'$subpage'_\1=\2/g'|grep -a -v INPUT |perl -MURI::Escape -e 'while(<>) {chomp; ($a,$b)=split(/=/);print $a,"=\"",uri_escape($b,"^A-Za-z0-9\-\._~"),"\"\n";}'  >> currentvalues
+    CHECKBOXFIELDS=""
+    for checkboxfield in $(cat fetch | grep -a '<INPUT'|grep -a  'type="CHECKBOX"'|grep -a CHECKED|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|grep -a -v INPUT|sort|uniq); do
+        CHECKBOXFIELDS="${CHECKBOXFIELDS} $checkboxfield"
+        cat fetch | grep -a '<INPUT'|grep -a  'type="CHECKBOX"'|grep -a CHECKED|sed -e 's/^.*name="\('$checkboxfield'\)".*value="\([^"]*\)".*$/\2/g' |grep -a -v INPUT|xargs echo |sed -e 's/ /:/g;s/^/VALUE_'$subpage'_'$checkboxfield'="/g;s/$/"/g' >> currentvalues
+    done
+    echo "FIELDS_${subpage}_CHECKBOX=\"${CHECKBOXFIELDS# }\"" >> currentvalues
+    TEXTAREAFIELDS=""
+    for textareafield in $(cat fetch | grep -a '<TEXTAREA'|sed -e 's/^.*NAME="\?\([_a-zA-Z0-9]*\)"\?.*$/\1/g'); do
+        TEXTAREAFIELDS="${TEXTAREAFIELDS} $textareafield"
+        rm -f field; touch field
+        rm -f inside
+        while read line; do
+            HERE=0
+            if [ ! -f inside ]&&[ $(echo "$line"|grep -a "<TEXTAREA NAME=$textareafield "|wc -l) -gt 0 ]; then
+                HERE=1
+                touch inside
+                # There are bugs here if a textarea is put inside the field. Who would do that?
+                line=$(echo "$line"|sed -e 's/^.*<TEXTAREA NAME='$textareafield'[^>]*>//g')
+            fi
+            if [ -f inside ]; then
+                if [ $(echo "$line"|grep -a '</TEXTAREA'|wc -l) -gt 0 ]; then
+                    line=$(echo "$line"|sed -e 's/<\/TEXTAREA.*$//g')
+                    HERE=$((HERE+1))
+                    rm -f inside
+                fi
+                if [ "$HERE" -lt 2 ]; then
+                    echo $line >> field
+                fi
+            fi
+        done < fetch
+        perl -MURI::Escape -e 'my $line=join("",<>); print "VALUE_'$subpage'_'$textareafield'=\"",uri_escape($line),"\"\n"' < field >> currentvalues
+    done
+    echo "FIELDS_${subpage}_TEXTAREA=\"${TEXTAREAFIELDS# }\"" >> currentvalues
+    SELECTFIELDS=""
+    for selectfield in $(cat fetch | grep -a '<Select'|sed -e 's/^.*name="\?\([_a-zA-Z0-9]*\)"\?.*$/\1/g'); do
+        SELECTFIELDS="${SELECTFIELDS} $selectfield"
+        rm -f field; touch field
+        rm -f inside
+        while read line; do
+            HERE=0
+            if [ ! -f inside ]&&[ $(echo "$line"|grep -a "<Select name=\"$selectfield\""|wc -l) -gt 0 ]; then
+                touch inside
+                line=""
+                # There are bugs here if a select is put inside the field. Who would do that?
+            fi
+            if [ -f inside ]; then
+                if [ $(echo "$line"|grep -a '</Select'|wc -l) -gt 0 ]; then
+                    rm -f inside
+                else
+                    if [ $(echo "$line"|grep -a '<option value=".*" Selected>'|wc -l) -gt 0 ]; then
+                        line=$(echo "$line"|sed -e 's/^.*<option value="\(.*\)".*$/\1/g')
+                    else
+                        line=""
+                    fi
+                fi
+            fi
+            if [ -f inside ]&&[ -n $line ]; then
+                echo -n $line >> field
+            fi
+        done < fetch
+        perl -MURI::Escape -e 'my $line=join("",<>); print "VALUE_'$subpage'_'$selectfield'=\"",uri_escape($line),"\"\n"' < field >> currentvalues
+    done
+    echo "FIELDS_${subpage}_SELECT=\"${SELECTFIELDS# }\"" >> currentvalues
+done
+
+mv currentvalues oldvalues
+sort < oldvalues > currentvalues
+rm -f field inside oldvalues
+
+if [ "$DUMP" = 1 ]; then
+    DEST="${CONFIG}".dump
+    if [ "$FORCEDUMP" ]; then
+        DEST="${CONFIG}"
+    fi
+    log "Dumping settings to $DEST"
+    grep ^VALUE_ currentvalues > $DUMP
+fi
+
+log "Reading config (2)"
+. ./currentvalues
+. $CONFIG
+
+if [ "$UPDATE" = 1 ]; then
+    for subpage in $SUBPAGES; do
+        log "Updating data for $subpage"
+        subpageurl=$(echo $subpage|sed -e 's/SLASH/\//g')
+        eval FIELDS=\"\$FIELDS_${subpage}_TEXT \$FIELDS_${subpage}_RADIO \$FIELDS_${subpage}_SELECT \$FIELDS_${subpage}_TEXTAREA\"
+        ARG=""
+        for field in $FIELDS; do
+            eval LARG=\"${field}=\$VALUE_${subpage}_$field\"
+            ARG="${ARG} -d ${LARG}"
+        done
+        curlit -k -D head -b cookies2 -c cookies -o fetch $ARG "${URLADMIN}/$subpageurl"
+    done
+fi
+
+if [ -z "$1" ]&&[ "$ADRDUMP" = 0 ]; then
+    log "No addresses. Stop."
+    die 0
+fi
+
+if [ -z "${URLROSTER}" ]; then
+    URLROSTER="${URL}/roster/${LISTNAME}"
+fi
+log "Récupération des membres actuels"
+curlit -k -D head -b cookies2 -c cookies -o fetch "$URLROSTER"
+
+cat fetch |grep -a '^<li>'|grep -v '<em>'|cut -f3 -d'>'| cut -f1 -d'<' > currenta
+cat fetch |grep -a '^<li><em>'|cut -f4 -d'>'| cut -f1 -d'<' > currentb
+cat currenta currentb | LC_ALL=C sort -u > current
+if [ $(wc -l < currentb) -gt 0 ]; then
+    warn "Some addresses are disabled"
+    warn "$(cat currentb|xargs echo)"
+fi
+if [ "$ADRDUMP" = 1 ]; then
+    cat current | xargs echo "$0" "$LIST"
+    log "Addresses dumped. Stop."
+    die 0
+fi
+
+diff -u current goals | grep '^-[^-]'| cut -c2- > remove
+diff -u current goals | grep '^+[^+]'| cut -c2- > append
+
+A=0
+if [ $(wc -l remove|cut -f1 -d' ') -gt 0 ]; then
+    A=1
+    log "Removing from list"
+    log "$(cat remove|xargs echo)"
+    XURL="${URLADMIN}/members/remove"
+    curlit -k -F 'unsubscribees=<remove' -F send_unsub_ack_to_this_batch=0 -F send_unsub_notifications_to_list_owner=0 -D head -b cookies2 -c cookies -o fetch "$XURL"
+    
+fi
+
+if [ $(wc -l append|cut -f1 -d' ') -gt 0 ]; then
+    A=1
+    log "Adding to the list"
+    log "$(cat append|xargs echo)"
+    XURL="${URLADMIN}/members/add"
+    curlit -k -F 'subscribees=<append' -F subscribe_or_invite=0 -F send_welcome_msg_to_this_batch=0 -F send_notifications_to_list_owner=0 -D head -b cookies2 -c cookies -o fetch "$XURL"
+fi
+if [ "$A" = 0 ]; then
+    log "Nothing to do"
+fi
+die 0
+

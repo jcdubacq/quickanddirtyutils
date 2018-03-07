@@ -1,0 +1,4 @@
+VALUE_general_info=""
+VALUE_general_description=$(url_encode "Permanents du département informatique")
+
+. $CONFIGDIR/common_info

@@ -1,0 +1,34 @@
+URL=https://mailman.somewhere.example/mailman
+LISTNAME=iutv-info-$LIST
+PASSWD="currentpassword"
+TRYPASSWD="someoldpassword ${PASSWD}"
+OWNER="someone%40somewhere.example%0Asomeotheradmin@elsewhere.example%0A"
+MODERATOR="$OWNER"
+# . $CONFIGDIR/common_info_alternateaddresses
+
+# Set owner and moderator
+
+VALUE_general_moderator="$MODERATOR"
+VALUE_general_owner="$OWNER"
+VALUE_general_real_name="${LISTNAME}"
+VALUE_general_subject_prefix="%5Bsomewhere-${LIST}%5D%20"
+
+# Specific settings to be enforced
+
+## Open lists
+
+VALUE_privacySLASHsender_generic_nonmember_action="0"
+
+## Language
+
+VALUE_language_available_languages="en:fr"
+VALUE_language_encode_ascii_prefixes="0"
+VALUE_language_preferred_language="fr"
+
+## Mailing-list sanity
+
+VALUE_general_anonymous_list="0"
+VALUE_general_first_strip_reply_to="0"
+VALUE_general_reply_goes_to_list="0"
+VALUE_general_reply_to_address=""
+
