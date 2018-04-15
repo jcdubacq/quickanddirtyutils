@@ -1,0 +1,63 @@
+#!/bin/sh
+
+## This script expects a file ~/.config/mailman/addresses csv with five columns
+## separated by ; without quotes
+## Family name;First name;main@email.address;tags,separated,by,commas;other@email.address
+## Given a tag, it will output the email addresses of the people with the tag
+
+
+ADD=$HOME/.config/mailman/addresses
+if [ ! -f "$ADD" ]; then
+    grep "$0" ^##|sed -e 's/^## //g'
+    exit 0
+fi
+TAG=""
+NOTAG=""
+ARGS=1
+while [ "$ARGS" = 1 ]; do
+    if [ "${1#+}" != "${1}" ]; then
+        TAG="$TAG ${1#+}"
+        shift
+    elif [ "${1#-}" != "${1}" ]; then
+        NOTAG="$NOTAG ${1#-}"
+        shift
+    else
+        ARGS=0
+    fi
+done
+
+RES=""
+
+while IFS="" read line 0<&3 ; do
+    NAME=$(echo "$line"|cut -f1 -d';')
+    XNAME=$(echo "$line"|cut -f2 -d';')
+    EMAIL=$(echo "$line"|cut -f3 -d';')
+    TAGS=$(echo "$line"|cut -f4 -d';'|sed -e 's/,/ /g')
+    IN=1
+    for mandatorytag in $TAG; do
+        XIN=0
+        for tag in $TAGS; do
+            if [ "$tag" = "$mandatorytag" ]; then
+                XIN=1
+            fi
+        done
+        if [ "$XIN" = 0 ]; then
+            IN=0
+        fi
+    done
+    for excludedtag in $NOTAG; do
+        XIN=1
+        for tag in $TAGS; do
+            if [ "$tag" = "$excludedtag" ]; then
+                XIN=0
+            fi
+        done
+        if [ "$XIN" = 0 ]; then
+            IN=0
+        fi
+    done
+    if [ "$IN" = 1 ]; then
+        RES="$RES $EMAIL"
+    fi
+done 3< "$ADD"
+echo "$@" $RES

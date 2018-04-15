@@ -1,0 +1,17 @@
+# Common
+set spoolfile=__PWD__/emails/__ID__
+set folder=__PWD__/emails/
+set record=__PWD__/emails/__ID__
+
+set realname="__NAME__"
+set from=__FROM__
+set envelope_from
+unset confirmappend
+set move=no
+set delete=yes
+unset mark_old
+unset sidebar_visible
+set text_flowed=yes
+
+ignore *
+unignore from: subject to cc date x-mailer x-url user-agent list-id x-status x-tag message-id

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+## This script expects a file ~/.config/mailman/addresses csv with five columns
+## separated by ; without quotes
+## Family name;First name;main@email.address;tags,separated,by,commas;other@email.address
+## Given a tag, it will output the email addresses of the people with the tag
+
+
+LISTS=$HOME/.config/mailman/lists
+if [ ! -f "$LISTS" ]; then
+    grep "$0" ^##|sed -e 's/^## //g'
+    exit 0
+fi
+
+while IFS="" read line 0<&3 ; do
+    NAME=$(echo "$line"|cut -f1 -d';')
+    TAGS=$(echo "$line"|cut -f2 -d';')
+    NOTAGS=$(echo "$line"|cut -f2 -d';')
+    echo -n "[$NAME";
+    ./mailmanupdate -u $NAME $(./splitaddresses "$TAGS" "$NOTAGS")
+    echo "]"
+done 3< "$LISTS"

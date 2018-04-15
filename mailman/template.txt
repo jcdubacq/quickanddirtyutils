@@ -1,0 +1,14 @@
+Subject:Vérification adresse e-mail départment informatique IUT de Villetaneuse
+From:Jean-Christophe Duabcq <jean-christophe.dubacq@iutv.univ-paris13.fr.invalid>
+
+Bonjour __PRENOM__ __NOM__,
+
+Je voudrais vérifier, suite aux multiples changements qui ont touchés notre système informatique, que j'utilise bien la bonne adresse pour les contacts par mail.
+
+L'adresse principale que j'utilise est « __EMAIL__ ».
+
+Si cette adresse n'est pas correcte, merci de me répondre en me disant quelle est l'adresse préférée qui va bien;
+
+Bien cordialement,
+-- 
+Jean-Christophe Dubacq

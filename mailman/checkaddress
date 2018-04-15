@@ -1,0 +1,70 @@
+#!/bin/sh
+
+## This script expects a csv file set in variable ADD (by default ~/.config/mailman/addresses)
+## with five columns separated by ; without quotes
+## Family name;First name;main@email.address;sometext;other@email.address
+## It will send an email according to template "$1"
+
+if [ -z "$ADD" ]; then
+    ADD=$HOME/.config/mailman/addresses
+fi
+
+if [ ! -f "$ADD" ]; then
+    grep "$0" ^##|sed -e 's/^## //g'
+    exit 0
+fi
+
+if [ -z "$2" ]; then
+    TEMPLATE=""
+else
+    if [ -f "$2" ]; then
+        TEMPLATE="$2"
+    else
+        echo "$2 n'est pas un fichier source"
+        exit 2
+    fi
+fi
+
+echo "J'envoie le message de type $TEMPLATE"
+
+if [ -n "$TEMPLATE" ]; then
+    SUBJECT=$(grep ^Subject: "$TEMPLATE"|cut -f2 -d:)
+    if [ -z "$SUBJECT" ]; then
+        echo "Il n'y a pas de sujet"
+        exit 2
+    fi
+    XFROM=$(grep ^From: "$TEMPLATE"|cut -f2 -d:)
+    REALNAME=$(echo "$XFROM"|cut -f1 -d'<'|sed -e 's/ *$//g')
+    ADDRESS=$(echo "$XFROM"|cut -f2 -d'<'|cut -f1 -d'>')
+fi
+
+DONE=0
+WAIT=0
+
+mkdir -p emails
+
+while IFS="" read line 0<&3 ; do
+    PRENOM=$(echo "$line"|cut -f2 -d';')
+    EMAIL=$(echo "$line"|cut -f3 -d';')
+    NOM=$(echo "$line"|cut -f1 -d';')
+    if [ -n "$NUM" ]; then
+        sed -e "s/__ID__/${NUM}/g;s/__FROM__/${ADDRESS}/g;s/__NAME__/${REALNAME}/g;s/__PWD__/$(pwd)/g" < muttrc > muttrc.now
+        if [ ! -f emails/${NUM} ]; then
+            touch emails/${NUM}
+        fi
+        if [ -n "$TEMPLATE" ]; then
+            if grep -q "^X-Template: $TEMPLATE" emails/${NUM}; then
+		DONE=$((DONE+1))
+            else
+                sed -e "/^Subject:/ d;/^From:/ d;s/__NOM__/${NOM}/g;s/__PRENOM__/${PRENOM}/g;s/__EMAIL__/${EMAIL}/g" < "$TEMPLATE" > message.txt
+		if [ "$WAIT" = 1 ]; then sleep 3; fi
+                echo "J'envoie un mail à $NOM ($NUM) par l'adresse $EMAIL"
+                mutt -F muttrc.now -e "my_hdr X-Template:$TEMPLATE" -s "$SUBJECT" "${EMAIL}" < "message.txt"
+		WAIT=1
+            fi
+        fi
+    fi
+done 3< "$ADD"
+if [ "$DONE" -gt 0 ]; then
+	echo "$DONE courriers déjà envoyés"
+fi
