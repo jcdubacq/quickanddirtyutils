@@ -165,7 +165,7 @@ if [ "$FAILED" -gt 0 ]; then
     die 1 "No authentication for list $LIST. I tried $TRIES passwords."
 fi
 
-SUBPAGES="general language archive privacy privacySLASHsender privacySLASHrecipient privacySLASHspam privacySLASHsubscribing"
+SUBPAGES="general passwords language archive privacy privacySLASHsender privacySLASHrecipient privacySLASHspam privacySLASHsubscribing"
 
 if [ "$DUMP" = 0 ]&&[ "$UPDATE" = 0 ]; then
     SUBPAGES=""
@@ -179,7 +179,10 @@ for subpage in $SUBPAGES; do
     curlit -k -d adminpw="$passwd" -D head -c cookies -o fetch "$XURL"
     TEXTFIELDS=$(cat fetch | grep -a '<INPUT'|grep -a 'type="TEXT"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|xargs echo)
     echo "FIELDS_${subpage}_TEXT=\"$TEXTFIELDS\"" >> currentvalues
+    PASSWORDFIELDS=$(cat fetch | grep -a '<INPUT'|grep -a 'type="PASSWORD"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|xargs echo)
+    echo "FIELDS_${subpage}_PASSWORD=\"$PASSWORDFIELDS\"" >> currentvalues
     cat fetch | grep -a '<INPUT'|grep -a 'type="TEXT"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/VALUE_'$subpage'_\1=\2/g'|grep -a -v INPUT |perl -MURI::Escape -e 'while(<>) {chomp; ($a,$b)=split(/=/);print $a,"=\"",uri_escape($b,"^A-Za-z0-9\-\._~"),"\"\n";}'  >> currentvalues
+    cat fetch | grep -a '<INPUT'|grep -a 'type="PASSWORD"'|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/VALUE_'$subpage'_\1=\2/g'|grep -a -v INPUT |perl -MURI::Escape -e 'while(<>) {chomp; ($a,$b)=split(/=/);print $a,"=\"",uri_escape($b,"^A-Za-z0-9\-\._~"),"\"\n";}'  >> currentvalues
     RADIOFIELDS=$(cat fetch | grep -a '<INPUT'|grep -a 'type="RADIO"'|grep -a CHECKED|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/\1/g'|xargs echo)
     echo "FIELDS_${subpage}_RADIO=\"$RADIOFIELDS\"" >> currentvalues
     cat fetch | grep -a '<INPUT'|grep -a  'type="RADIO"'|grep -a CHECKED|sed -e 's/^.*name="\([^"]*\)".*value="\([^"]*\)".*$/VALUE_'$subpage'_\1=\2/g'|grep -a -v INPUT |perl -MURI::Escape -e 'while(<>) {chomp; ($a,$b)=split(/=/);print $a,"=\"",uri_escape($b,"^A-Za-z0-9\-\._~"),"\"\n";}'  >> currentvalues
@@ -254,11 +257,11 @@ rm -f field inside oldvalues
 
 if [ "$DUMP" = 1 ]; then
     DEST="${CONFIG}".dump
-    if [ "$FORCEDUMP" ]; then
+    if [ "$FORCEDUMP" = 1 ]; then
         DEST="${CONFIG}"
     fi
     log "Dumping settings to $DEST"
-    grep ^VALUE_ currentvalues > $DUMP
+    grep ^VALUE_ currentvalues > $DEST
 fi
 
 log "Reading config (2)"
@@ -269,7 +272,7 @@ if [ "$UPDATE" = 1 ]; then
     for subpage in $SUBPAGES; do
         log "Updating data for $subpage"
         subpageurl=$(echo $subpage|sed -e 's/SLASH/\//g')
-        eval FIELDS=\"\$FIELDS_${subpage}_TEXT \$FIELDS_${subpage}_RADIO \$FIELDS_${subpage}_SELECT \$FIELDS_${subpage}_TEXTAREA\"
+        eval FIELDS=\"\$FIELDS_${subpage}_TEXT \$FIELDS_${subpage}_PASSWORD \$FIELDS_${subpage}_RADIO \$FIELDS_${subpage}_SELECT \$FIELDS_${subpage}_TEXTAREA\"
         ARG=""
         for field in $FIELDS; do
             eval LARG=\"${field}=\$VALUE_${subpage}_$field\"
