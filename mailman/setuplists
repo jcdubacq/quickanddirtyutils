@@ -12,11 +12,18 @@ if [ ! -f "$LISTS" ]; then
     exit 0
 fi
 
+
 while IFS="" read line 0<&3 ; do
-    NAME=$(echo "$line"|cut -f1 -d';')
-    TAGS=$(echo "$line"|cut -f2 -d';')
-    NOTAGS=$(echo "$line"|cut -f2 -d';')
-    echo -n "[$NAME";
-    ./mailmanupdate -u $NAME $(./splitaddresses "$TAGS" "$NOTAGS")
-    echo "]"
+        NAME=$(echo "$line"|cut -f1 -d';')
+        TAGS=$(echo "$line"|cut -f2 -d';')
+        NOTAGS=$(echo "$line"|cut -f2 -d';')
+        echo -n "[$NAME";
+        DO=1
+        if [ -n "$1" ] && [ "$1" != "$NAME" ]; then
+            DO=0
+        fi
+        if [ "$DO" = 1 ]; then
+            ./mailmanupdate -u $NAME $(./splitaddresses "$TAGS" "$NOTAGS")
+        fi
+        echo "]"
 done 3< "$LISTS"
