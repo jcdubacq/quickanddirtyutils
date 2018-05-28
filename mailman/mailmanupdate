@@ -3,6 +3,8 @@ export LC_ALL
 LC_ALL=C
 
 curlit () {
+    echo -n "."
+    sleep 1
     if [ "$VERBOSE" -gt 2 ]; then
         echo curl -s -retry 5 --connect-timeout 1 "$@"
     fi
