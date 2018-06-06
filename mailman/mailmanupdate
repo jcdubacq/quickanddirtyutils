@@ -358,6 +358,13 @@ if [ "$UPDATE" = 1 ]; then
             eval LARG=\"${field}=\$VALUE_${subpage}_$field\"
             ARG="${ARG} -d ${LARG}"
         done
+        eval FIELDS=\"\$FIELDS_${subpage}_CHECKBOX\"
+        for field in $FIELDS; do
+            eval LVALS=\"\$VALUE_${subpage}_$field\"
+	    for val in $(echo $LVALS | tr ',:' '  '); do
+		ARG="${ARG} -d $field=$val"
+	    done
+        done
         eval FIELDS=\"\$FIELDS_${subpage}_HIDDEN \$FIELDS_${subpage}_SUBMIT\"
         for field in $FIELDS; do
             eval LARG=\"${field}=\$HVALUE_${subpage}_$field\"
