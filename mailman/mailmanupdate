@@ -18,10 +18,18 @@ curlit () {
     fi
 }
 
-TMPFILE=/tmp/xxx
-mkdir -p $TMPFILE
+TMPFILE=
+
+cleanup() {
+    if [ "$TMPFILE" ]; then
+	rm -rf "$TMPFILE"
+    fi
+}
+
+trap cleanup EXIT
+
+TMPFILE="$(mktemp -d)"
 cd $TMPFILE
-rm -f cookies cookies2 fetch fetch2 head head2 log
 
 PWD="defaultpassword"
 
