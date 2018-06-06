@@ -239,7 +239,7 @@ if [ "$FAILED" -gt 0 ]; then
     die 1 "No authentication for list $LIST. I tried $TRIES passwords."
 fi
 
-SUBPAGES="general passwords language archive privacy privacySLASHsender privacySLASHrecipient privacySLASHspam privacySLASHsubscribing"
+SUBPAGES="general passwords language archive privacySLASHsender privacySLASHrecipient privacySLASHspam privacySLASHsubscribing"
 
 if [ "$DUMP" = 0 ]&&[ "$UPDATE" = 0 ]; then
     SUBPAGES=""
