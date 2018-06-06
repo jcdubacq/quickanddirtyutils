@@ -2,6 +2,8 @@
 export LC_ALL
 LC_ALL=C
 
+PROGNAME="$(basename "$0")"
+
 curlit () {
     echo -n "."
     sleep 1
@@ -57,36 +59,106 @@ die () {
     exit "$status"
 }
 
+usage() {
+    echo "usage: $PROGNAME [options] action [nomdeliste [adresses]]"
+    echo "Options:"
+    echo "  -v|--verbose: verbose mode (can be repeated)"
+    echo "  -q|--quiet: quiet mode"
+    echo "  -h|--help: this help"
+    echo "Actions:"
+    echo "  -a|--action addresses: dump addresses mode"
+    echo "  -d|--action dump: dump settings mode"
+    echo "  -u|--action update: update settings mode"
+    echo "Settings are stored under $CONFIGDIR/<listname>"
+    echo "Dumps are made in $CONFIGDIR/<listname>.dump"
+}
 
+check_action() {
+    ACTION="$1"
+    TEMP=`getopt --shell sh \
+	-o '' --long addresses,dump,update \
+	--quiet \
+	-n "$PROGNAME --action" -- "--$ACTION"`
+    if [ "$?" != 0 ]; then
+	(usage; echo ; echo "Invalid action '$ACTION'. Aborting.") 1>&2
+	exit 1
+    fi
+    eval set -- "$TEMP"
+    case "$1" in
+    --)
+	(usage; echo ; echo "No action specified, aborting.") 1>&2
+	exit 1
+	;;
+    --*)
+	ACTION="$(echo "$1" | sed 's/^--//')"
+	;;
+    *)
+	(usage; echo ; echo "Invalid action '$ACTION'") 1>&2
+	exit 1
+	;;
+    esac
+}
 
 VERBOSE=1
-while [ "$1" = "-v" ]; do
-    VERBOSE=$((VERBOSE+1))
+
+TEMP=`getopt --shell sh \
+        -o vqhadu --long verbose,quiet,help,action: \
+        -n "$PROGNAME" -- "$@"`
+
+eval set -- "$TEMP"
+
+ACTION=
+while [ $# != 0 ]; do
+    case "$1" in
+    -v|--verbose)
+	VERBOSE=$((VERBOSE+1))
+	;;
+    -q|--quiet)
+	VERBOSE=0
+	;;
+    -h|--help)
+	usage
+	exit 0
+	;;
+    --action)
+	shift
+	ACTION="$1"
+	;;
+    -a)
+	ACTION="addresses"
+	;;
+    -d)
+	ACTION="dump"
+	;;
+    -u)
+	ACTION="update"
+	;;
+    --)
+	shift
+	break
+	;;
+    -*)
+	usage 1>&2
+	echo 1>&2
+	echo 1>&2 "Unknown option '$1'. Aborting."
+	die 1
+	;;
+    esac
     shift
 done
-if [ "$1" = "-q" ]; then
-    VERBOSE=0
-    shift
-fi
+
+check_action "$ACTION"
+log "selected action: $ACTION"
 
 DUMP=0
-if [ "$1" = "-d" ]; then
-    DUMP=1
-    shift
-fi
-
 ADRDUMP=0
-if [ "$1" = "-a" ]; then
-    ADRDUMP=1
-    shift
-fi
-
 UPDATE=0
-if [ "$1" = "-u" ]; then
-    UPDATE=1
-    shift
-fi
-
+case "$ACTION" in
+dump) DUMP=1;;
+addresses) ADRDUMP=1;;
+update) UPDATE=1;;
+*) echo 2>&1 "Internal error. Aborting"; die 1;;
+esac
 
 LIST="$1"
 shift
@@ -95,15 +167,7 @@ CONFIGDIR="$HOME/.config/mailman"
 CONFIG="$CONFIGDIR/$LIST"
 
 if [ -z "$LIST" ]; then
-    echo "$0 [-v] [-q] [-d] [-u] nomdeliste [adresses]"
-    echo "Order of options is significant"
-    echo "v: verbose mode"
-    echo "q: quiet mode"
-    echo "a: dump addresses mode"
-    echo "d: dump settings mode"
-    echo "u: update settings mode"
-    echo "Settings are stored under $CONFIGDIR/<listname>"
-    echo "Dumps are made in $CONFIGDIR/<listname>.dump"
+    usage
     die 0
 fi
 
