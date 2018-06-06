@@ -37,6 +37,10 @@ url_encode () {
     echo "$@"|perl -Mutf8 -MURI::Escape -e 'my $line=join("",<>); chomp $line; utf8::decode($line); print uri_escape($line)'
 }
 
+url_decode () {
+    echo "$@"|perl -Mutf8 -MURI::Escape -e 'my $line=join("",<>); $line=uri_unescape($line); print $line'
+}
+
 log () {
     echo "$@" >> log
     if [ "$VERBOSE" -gt 1 ]; then
@@ -341,7 +345,21 @@ if [ "$DUMP" = 1 ]; then
         DEST="${CONFIG}"
     fi
     log "Dumping settings to $DEST"
-    grep ^VALUE_ currentvalues > $DEST
+    grep ^VALUE_ currentvalues | while read line ; do
+	var="$(echo "$line" | sed -e 's/=.*//')"
+	val="$(echo "$line" | sed -e 's/[^=]*="\(.*\)"$/\1/')"
+	if [ "$var" = "$line" -o "$val" = "$line" ]; then
+	    echo "$line"
+	else
+	    valdec="$(url_decode "$val")"
+	    if [ "$valdec" = "$val" ]; then
+		echo "$line"
+	    else
+		valdec="$(echo "$valdec" | sed "s/'/'\\\\''/g")"
+		echo "$var="'"$(url_encode '"'$valdec')"'"'
+	    fi
+	fi
+    done > $DEST
 fi
 
 log "Reading config (2)"
