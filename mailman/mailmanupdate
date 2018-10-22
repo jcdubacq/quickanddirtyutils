@@ -224,6 +224,7 @@ touch cookies
 XURL="$URLADMIN"
 TRIES=0
 FAILED=1
+REALPASSWD=""
 for passwd in $TRYPASSWD; do
     if [ "$FAILED" -gt 0 ]; then
         TRIES=$((TRIES+1))
@@ -234,10 +235,12 @@ for passwd in $TRYPASSWD; do
             log "Password $passwd failed"
         else
             log "Authentication success with $passwd"
+            REALPASSWD="$passwd"
             cp cookies cookies2
         fi
     fi
 done
+passwd="$REALPASSWD"
 
 if [ "$FAILED" -gt 0 ]; then
     die 1 "No authentication for list $LIST. I tried $TRIES passwords."
